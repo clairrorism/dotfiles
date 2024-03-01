@@ -101,6 +101,5 @@ source $ZSH/oh-my-zsh.sh
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 eval "$(starship init zsh)"
 eval "$(zoxide init zsh)"
-alias hx="helix"
 alias ls="eza -l -G"
 alias cd="z"
