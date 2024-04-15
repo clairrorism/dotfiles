@@ -54,18 +54,43 @@ vim.opt.rtp:prepend(lazypath)
 require("lazy").setup({
   { "nvim-lua/plenary.nvim" },
   { "MunifTanjim/nui.nvim" },
-  { "j-hui/fidget.nvim", opts = {} },
+  { "j-hui/fidget.nvim",    opts = {} },
   {
-    "nvim-telescope/telescope-fzf-native.nvim",
-    build =  "cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=Release && cmake --build build --config Release && cmake --install build --prefix build",
+    "nvim-telescope/telescope.nvim",
+    tag = "0.1.6",
+    lazy = false,
+    config = function()
+      require("telescope").setup {
+        extensions = {
+          fzf = {
+            fuzzy = true,
+            override_generic_sorter = true,
+            override_file_sorter = true,
+            case_mode = "smart_case",
+          }
+        }
+      }
+      require("telescope").load_extension("fzf")
+    end,
+    dependencies = {
+      {
+        "nvim-telescope/telescope-fzf-native.nvim",
+        build =
+        "cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=Release && cmake --build build --config Release && cmake --install build --prefix build",
+      }
+    },
     keys = function()
       local good, ts = pcall(require, "telescope.builtin")
       if good then
         return {
-          { "<leader>fd", ts.live_grep,  desc = "Search for string in CWD" },
-          { "<leader>of", ts.old_files,  desc = "List old files" },
-          { "<leader>lR", ts.references, desc = "List references to item" },
-          { "<leader>bl", ts.buffers,    desc = "List open buffers" },
+          { "<leader>fd", ts.live_grep,             desc = "Search for string in CWD" },
+          { "<leader>of", ts.old_files,             desc = "List old files" },
+          { "<leader>lR", ts.lsp_references,        desc = "List references to item" },
+          { "<leader>b",  ts.buffers,               desc = "List open buffers" },
+          { "<leader>fg", ts.git_files,             desc = "List git files" },
+          { "<leader>qf", ts.quickfix,              desc = "List quickfix items" },
+          { "<leader>ls", ts.lsp_document_symbols,  desc = "List document symbols" },
+          { "<leader>lw", ts.lsp_workspace_symbols, desc = "List workspace symbols" }
         }
       else
         return nil
@@ -80,6 +105,12 @@ require("lazy").setup({
       require("nord").setup({})
       vim.cmd.colorscheme("nord")
     end,
+  },
+  {
+    "akinsho/bufferline.nvim",
+    version = "*",
+    dependencies = "nvim-tree/nvim-web-devicons",
+    config = true,
   },
   {
     "nvim-treesitter/nvim-treesitter",
@@ -115,7 +146,7 @@ require("lazy").setup({
       },
     },
   },
-    {
+  {
     "utilyre/barbecue.nvim",
     dependencies = {
       "SmiteshP/nvim-navic",
@@ -209,8 +240,39 @@ require("lazy").setup({
   {
     "williamboman/mason-lspconfig.nvim",
     opts = {
+      ensure_installed = { "astro", "csharp_ls", "neocmake", "cssls", "cssmodules_ls", "fsautocomplete", "html", "jsonls", "tsserver", "lua_ls", "marksman", "mdx_analyzer", "basedpyright", "taplo", "tailwindcss", "wgsl_analyzer", "zls" },
       automatic_installation = true,
+      handlers = {
+        function(server)
+          require("lspconfig")[server].setup({
+            capabilities = require("cmp_nvim_lsp").default_capabilities(),
+            on_attach = require("lsp-format").on_attach
+          })
+        end,
+        ["rust_analyzer"] = function() end
+      }
     },
+  },
+  {
+    "mrcjkb/rustaceanvim",
+    version = "^4",
+    ft = { "rust" },
+    config = function()
+      vim.g.rustaceanvim = {
+        server = {
+          capabilities = require("cmp_nvim_lsp").default_capabilities(),
+          on_attach = require("lsp-format").on_attach
+        }
+      }
+    end
+  },
+  {
+    "lukas-reineke/lsp-format.nvim",
+    config = true,
+  },
+  {
+    "stevearc/dressing.nvim",
+    opts = {}
   },
   {
     "neovim/nvim-lspconfig",
@@ -222,19 +284,6 @@ require("lazy").setup({
       { "<leader>gi", vim.lsp.buf.implementation, desc = "Go to implementation" },
     },
     lazy = false,
-    config = function()
-      local lspc = require("lspconfig")
-      local opt = { capabilities = require("cmp_nvim_lsp").default_capabilities()--[[, on_attach = require("lsp-format").on_attach ]]}
-      lspc.pyright.setup(opt)
-      lspc.tsserver.setup(opt)
-      lspc.zls.setup(opt)
-      lspc.clangd.setup(opt)
-      lspc.cssmodules_ls.setup(opt)
-      lspc.csharp_ls.setup(opt)
-      lspc.lua_ls.setup(opt)
-      lspc.rust_analyzer.setup(opt)
-      lspc.dartls.setup(opt)
-    end,
   },
   {
     "windwp/nvim-autopairs",
@@ -265,12 +314,12 @@ require("lazy").setup({
     "folke/zen-mode.nvim",
     opts = {
       window = {
-        width = 70,
+        width = 85,
       },
       plugins = {
-        kitty = {
+        alacritty = {
           enabled = true,
-          font = "+3",
+          font = "13",
         },
       },
     },
@@ -295,6 +344,9 @@ require("lazy").setup({
   }
 })
 
+vim.keymap.set("n", "<C-right>", "<cmd>bnext<cr>")
+vim.keymap.set("n", "<C-left>", "<cmd>bprevious<cr>")
+
 vim.api.nvim_create_autocmd("BufEnter", {
   pattern = { "*.md", "*.mdx", "*.txt" },
   callback = function()
@@ -315,4 +367,25 @@ vim.api.nvim_create_autocmd("BufEnter", {
   callback = function()
     o.tabstop = 2
   end,
+})
+
+vim.api.nvim_create_autocmd("BufEnter", {
+  pattern = { "*.rs" },
+  callback = function()
+    local rs_map = function(mode, key, cmd)
+      vim.keymap.set(mode, "<leader>" .. key, "<cmd>RustLsp " .. cmd .. "<cr>")
+    end
+    rs_map("n", "a", "codeAction")
+    rs_map("n", "rr", "runnables")
+    rs_map("n", "rt", "testables")
+    rs_map("n", "rm", "expandMacro")
+    rs_map("n", "ru", "moveItem up")
+    rs_map("n", "rd", "moveItem down")
+    rs_map("n", "re", "explainError")
+    rs_map("n", "rD", "renderDiagnostic")
+    rs_map("n", "rc", "openCargo")
+    rs_map("n", "rp", "parentModule")
+    rs_map("n", "rs", "syntaxTree")
+    rs_map("v", "j", "joinLines")
+  end
 })
